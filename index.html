@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>소다수 키우기 v4: 이스터에그</title>
+    <title>소다수 키우기</title>
     <style>
         body {
             font-family: 'Malgun Gothic', sans-serif;
@@ -143,19 +143,30 @@
         // 2. 시나리오 데이터
         const scenes = {
             'start': {
-                // 이름을 텍스트에 넣기 위해 함수형으로 변경 가능하지만, 여기선 단순 텍스트
-                text: "방 안에 작은 '소다수' 알이 있습니다. 당신을 기다린 것 같습니다.",
-                image: "images/egg.png",
+                text: "길가에 종이 박스가 덩그러니 놓여져있습니다. 그 안에는 소다수가 들어있습니다. 어떻게 할까요?",
+                image: "images/start.png",
                 choices: [
-                    { text: "쓰다듬어 준다", next: "hatch", effect: () => updateStat('intimacy', 10) },
-                    { text: "지켜본다", next: "hatch" }
+                    { text: "소다수를 데려간다", next: "hatch", effect: () => updateStat('intimacy', 10) },
+                    // [변경됨] next를 'ending_ignore'로 변경하여 바로 엔딩으로 이동
+                    { text: "그냥 지나간다", next: "ending_ignore" } 
                 ]
             },
+            
+            // [추가됨] 무시하기 엔딩 장면
+            'ending_ignore': {
+                text: "당신은 박스를 외면하고 지나쳤습니다. 며칠 뒤 그곳엔 빈 박스만 남아있었습니다... (노말 엔딩)",
+                image: "images/empty_box.png", // 빈 박스 이미지가 있다면 설정, 없으면 기존 이미지 사용
+                choices: [
+                    { text: "다시 시작하기", next: "title", effect: showTitleScreen }
+                ]
+            },
+
             'hatch': {
-                text: "알이 깨지고 아기 소다수가 태어났습니다! 꼬물거립니다.",
+                text: "소다수는 집을 두리번거립니다.",
                 image: "images/baby.png",
                 choices: [{ text: "거실로 데려가기", next: "living_room" }]
             },
+            
             'living_room': {
                 text: "거실입니다. 소다수는 당신을 바라보고 있습니다.",
                 image: "images/room.png",
@@ -232,7 +243,7 @@
 
             // 이스터에그 체크 로직
             if (inputName === "오션") {
-                alert("🌊 [이스터에그 발견] 당신은 물의 신입니다! '수신메론'을 획득했습니다.");
+                alert("'수신메론'을 획득했습니다.");
                 gameState.inventory.push("수신메론");
             }
 
