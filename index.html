@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>소다수 키우기 v4: 이스터에그</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f0f8ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #game-container {
+            background: white;
+            width: 420px;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 2px solid #87ceeb;
+            position: relative;
+            overflow: hidden; /* 오프닝 화면이 튀어나가지 않게 */
+        }
+
+        /* 1. 오프닝(이름 입력) 화면 스타일 */
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #name-input {
+            padding: 10px;
+            font-size: 1rem;
+            border: 2px solid #87ceeb;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            width: 60%;
+            text-align: center;
+        }
+
+        #start-btn {
+            padding: 10px 20px;
+            background-color: #87ceeb;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+        #start-btn:hover { background-color: #00bfff; }
+
+        /* 기존 게임 UI 스타일 */
+        #status-bar {
+            display: flex; justify-content: space-between;
+            background-color: #e3f2fd; padding: 10px;
+            border-radius: 8px; margin-bottom: 15px;
+            font-weight: bold; color: #555; font-size: 0.9rem;
+        }
+        #inventory-box {
+            background-color: #fafafa; border: 1px dashed #ccc;
+            padding: 5px; font-size: 0.8rem; min-height: 20px;
+            margin-bottom: 10px; color: #666; text-align: left;
+        }
+        #scene-image {
+            width: 100%; height: 220px; object-fit: contain;
+            background-color: #eee; border-radius: 10px; margin-bottom: 15px;
+        }
+        #story-text {
+            font-size: 1.1rem; margin-bottom: 20px; min-height: 50px;
+            color: #333; line-height: 1.5;
+        }
+        .choice-btn {
+            display: block; width: 100%; padding: 12px; margin: 8px 0;
+            background-color: #87ceeb; color: white; border: none;
+            border-radius: 8px; font-size: 1rem; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .choice-btn:hover { background-color: #00bfff; }
+        
+        /* 특수 아이템 버튼 색상 */
+        .special-btn { background-color: #98fb98; color: #006400; font-weight: bold; }
+        .special-btn:hover { background-color: #32cd32; }
+
+        .event-alert { animation: shake 0.5s; border-color: #ff9800 !important; }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="start-screen">
+            <h2 style="color:#87ceeb;">소다수 키우기</h2>
+            <p>집사의 이름을 알려주세요!</p>
+            <input type="text" id="name-input" placeholder="이름 입력" autocomplete="off">
+            <button id="start-btn" onclick="startGame()">게임 시작</button>
+        </div>
+
+        <div id="status-bar">
+            <span id="stat-intimacy">❤️ 호감도: 0</span>
+            <span id="stat-money">💰 코인: 500</span>
+        </div>
+
+        <div id="inventory-box">
+            🎒 가방: <span id="inventory-list">비어있음</span>
+        </div>
+
+        <img id="scene-image" src="" alt="장면 이미지">
+        <div id="story-text"></div>
+        <div id="choices"></div>
+    </div>
+
+    <script>
+        // 1. 게임 상태 (이름 추가)
+        let gameState = {
+            playerName: "", // 플레이어 이름 저장
+            intimacy: 0,
+            money: 500,
+            inventory: []
+        };
+
+        const randomEvents = [
+            { id: "evt_money", type: "random", probability: 1, sceneData: { text: "산책 중 100원을 주웠습니다!", image: "images/coin_event.png", choices: [{ text: "좋다!", next: "living_room", effect: () => updateStat('money', 100) }] } },
+            { id: "evt_rain", type: "random", probability: 1, sceneData: { text: "소나기가 내립니다. 소다수가 시원해합니다.", image: "images/rain_event.png", choices: [{ text: "집으로", next: "living_room", effect: () => updateStat('intimacy', 5) }] } }
+        ];
+
+        // 2. 시나리오 데이터
+        const scenes = {
+            'start': {
+                // 이름을 텍스트에 넣기 위해 함수형으로 변경 가능하지만, 여기선 단순 텍스트
+                text: "방 안에 작은 '소다수' 알이 있습니다. 당신을 기다린 것 같습니다.",
+                image: "images/egg.png",
+                choices: [
+                    { text: "쓰다듬어 준다", next: "hatch", effect: () => updateStat('intimacy', 10) },
+                    { text: "지켜본다", next: "hatch" }
+                ]
+            },
+            'hatch': {
+                text: "알이 깨지고 아기 소다수가 태어났습니다! 꼬물거립니다.",
+                image: "images/baby.png",
+                choices: [{ text: "거실로 데려가기", next: "living_room" }]
+            },
+            'living_room': {
+                text: "거실입니다. 소다수는 당신을 바라보고 있습니다.",
+                image: "images/room.png",
+                choices: [
+                    // 이스터에그 아이템 사용 버튼 (조건부 등장)
+                    { 
+                        text: "✨ '수신메론' 먹이기 (전설의 간식!)", 
+                        next: "eat_melon", 
+                        customClass: "special-btn",
+                        req: () => gameState.inventory.includes("수신메론"), // 아이템이 있어야만 보임
+                        effect: () => { useItem("수신메론"); updateStat('intimacy', 100); } // 사용 시 소모됨
+                    },
+                    { text: "놀아주기 (호감도+5, 코인-50)", next: "play", effect: () => { updateStat('intimacy', 5); updateStat('money', -50); } },
+                    { text: "산책 나가기 (랜덤)", next: "", customClass: "shop-btn", effect: () => tryRandomEvent() },
+                    { text: "상점 가기", next: "shop" },
+                    { text: "엔딩 확인", next: "check_ending" }
+                ]
+            },
+            'eat_melon': {
+                text: "소다수가 수신메론을 먹고 엄청난 행복을 느낍니다! 기포가 폭죽처럼 터집니다! (호감도 대폭 상승)",
+                image: "images/melon_eat.png",
+                choices: [{ text: "흐뭇하게 바라본다", next: "living_room" }]
+            },
+            'play': {
+                text: "즐거운 시간을 보냈습니다.",
+                image: "images/play.png",
+                choices: [{ text: "다시 거실로", next: "living_room" }]
+            },
+            'shop': {
+                text: "편의점입니다.",
+                image: "images/shop.png",
+                choices: [
+                    { 
+                        text: "선글라스 구매 (400코인)", next: "shop",
+                        req: () => gameState.money >= 400 && !gameState.inventory.includes("선글라스"),
+                        effect: () => { updateStat('money', -400); addItem("선글라스"); }
+                    },
+                    { text: "돌아가기", next: "living_room" }
+                ]
+            },
+            'check_ending': {
+                text: "성장의 시간입니다...",
+                image: "images/evolution.png",
+                choices: [{ text: "결과 보기", next: "", effect: () => checkEndings() }]
+            },
+            // 엔딩들
+            'ending_happy': { text: "해피 엔딩: 레전드 사이다!", image: "images/happy_end.png", choices: [{text:"다시하기", next:"title", effect:showTitleScreen}] }, // 다시하기 시 타이틀로
+            'ending_bad': { text: "배드 엔딩: 맹물...", image: "images/bad_end.png", choices: [{text:"다시하기", next:"title", effect:showTitleScreen}] },
+            'ending_cool': { text: "히든 엔딩: 힙합 스타!", image: "images/cool_end.png", choices: [{text:"다시하기", next:"title", effect:showTitleScreen}] }
+        };
+
+        // 3. 엔진 함수들
+        const imageEl = document.getElementById('scene-image');
+        const textEl = document.getElementById('story-text');
+        const choicesEl = document.getElementById('choices');
+        const startScreen = document.getElementById('start-screen');
+        const nameInput = document.getElementById('name-input');
+
+        // --- 핵심: 게임 시작 및 이스터에그 체크 ---
+        function startGame() {
+            const inputName = nameInput.value.trim();
+            if (!inputName) {
+                alert("이름을 입력해주세요!");
+                return;
+            }
+
+            // 초기화
+            gameState = {
+                playerName: inputName,
+                intimacy: 0,
+                money: 500,
+                inventory: []
+            };
+
+            // 이스터에그 체크 로직
+            if (inputName === "오션") {
+                alert("🌊 [이스터에그 발견] 당신은 물의 신입니다! '수신메론'을 획득했습니다.");
+                gameState.inventory.push("수신메론");
+            }
+
+            startScreen.style.display = "none"; // 시작 화면 숨김
+            updateHUD();
+            showScene('start');
+        }
+
+        function showTitleScreen() {
+            startScreen.style.display = "flex"; // 시작 화면 다시 보임
+            nameInput.value = ""; // 입력창 초기화
+        }
+        // ----------------------------------------
+
+        function updateStat(type, amount) {
+            gameState[type] += amount;
+            updateHUD();
+        }
+
+        function addItem(itemName) {
+            if(gameState.inventory.includes(itemName)) return;
+            gameState.inventory.push(itemName);
+            alert(`✨ [${itemName}] 획득!`);
+            updateHUD();
+        }
+
+        // 아이템 사용(소모) 함수 추가
+        function useItem(itemName) {
+            const index = gameState.inventory.indexOf(itemName);
+            if (index > -1) {
+                gameState.inventory.splice(index, 1); // 배열에서 삭제
+                updateHUD();
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('stat-intimacy').innerText = `❤️ 호감도: ${gameState.intimacy}`;
+            document.getElementById('stat-money').innerText = `💰 코인: ${gameState.money}`;
+            const invList = document.getElementById('inventory-list');
+            invList.innerText = gameState.inventory.length === 0 ? "비어있음" : gameState.inventory.join(", ");
+        }
+
+        function tryRandomEvent() {
+            let candidates = randomEvents.filter(evt => {
+                if (evt.type === 'random') return true;
+                if (evt.type === 'condition' && evt.req()) return true;
+                return false;
+            });
+
+            if (candidates.length === 0) {
+                showSceneRaw({ text: "아무 일도 없었습니다.", image: "images/walk_normal.png", choices: [{ text: "집으로", next: "living_room" }] });
+                return;
+            }
+
+            const selectedEvent = candidates[Math.floor(Math.random() * candidates.length)];
+            document.getElementById('game-container').classList.add('event-alert');
+            setTimeout(() => document.getElementById('game-container').classList.remove('event-alert'), 500);
+            showSceneRaw(selectedEvent.sceneData);
+        }
+
+        function showSceneRaw(sceneData) {
+            // 텍스트에 플레이어 이름 반영 (예: {name}을 이름으로 치환)
+            let processedText = sceneData.text.replace("{name}", gameState.playerName);
+            textEl.innerText = processedText;
+
+            if (sceneData.image) {
+                imageEl.src = sceneData.image;
+                imageEl.onerror = function() { this.style.backgroundColor = '#ddd'; this.alt = "이미지 없음"; };
+            }
+            choicesEl.innerHTML = '';
+            
+            sceneData.choices.forEach(choice => {
+                if (choice.req && !choice.req()) return;
+
+                const btn = document.createElement('button');
+                btn.innerText = choice.text;
+                btn.className = 'choice-btn';
+                if (choice.customClass) btn.classList.add(choice.customClass);
+                
+                btn.onclick = () => {
+                    if (choice.effect) choice.effect();
+                    if (choice.next) {
+                        if(choice.next === 'title') showTitleScreen();
+                        else showScene(choice.next);
+                    }
+                };
+                choicesEl.appendChild(btn);
+            });
+        }
+
+        function showScene(sceneId) {
+            if(!scenes[sceneId]) return;
+            showSceneRaw(scenes[sceneId]);
+        }
+
+        function checkEndings() {
+            if(gameState.inventory.includes("선글라스")) showScene("ending_cool");
+            else if(gameState.intimacy >= 50) showScene("ending_happy");
+            else showScene("ending_bad");
+        }
+
+        // 초기 실행은 이제 startGame()이 담당하므로 여기선 HUD만 초기화
+        updateHUD();
+
+    </script>
+</body>
+</html>
